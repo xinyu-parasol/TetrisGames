@@ -1,0 +1,9 @@
+<RCC>
+    <qresource prefix="/new/prefix1">
+        <file>images/logo.png</file>
+        <file>images/background.jpg</file>
+        <file>music/Clear.wav</file>
+        <file>music/Drop.wav</file>
+        <file>music/Move.wav</file>
+    </qresource>
+</RCC>

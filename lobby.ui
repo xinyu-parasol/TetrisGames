@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>Lobby</class>
+ <widget class="QWidget" name="Lobby">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>400</width>
+        <height>300</height>
+       </rect>
+      </property>
+      <property name="windowTitle">
+       <string>联机大厅</string>
+      </property>
+      <layout class="QVBoxLayout" name="verticalLayout">
+       <item>
+        <widget class="QLabel" name="titleLabel">
+         <property name="text">
+          <string>&lt;h2&gt;俄罗斯方块双人对战&lt;/h2&gt;</string>
+         </property>
+         <property name="alignment">
+          <set>Qt::AlignCenter</set>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <layout class="QHBoxLayout" name="buttonLayout">
+         <item>
+          <widget class="QPushButton" name="hostButton">
+           <property name="text">
+            <string>创建房间</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="joinButton">
+           <property name="text">
+            <string>加入房间</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="singleButton">
+           <property name="text">
+            <string>单人模式</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+       <item>
+        <widget class="QPushButton" name="rankingButton">
+         <property name="text">
+          <string>排行榜</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="hostInfoLabel">
+         <property name="text">
+          <string>本机IP: 192.168.1.100 : 8888</string>
+         </property>
+         <property name="alignment">
+          <set>Qt::AlignCenter</set>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <layout class="QFormLayout" name="clientForm">
+         <item row="0" column="0">
+          <widget class="QLabel" name="labelIp">
+           <property name="text">
+            <string>服务器IP:</string>
+           </property>
+          </widget>
+         </item>
+         <item row="0" column="1">
+          <widget class="QLineEdit" name="clientIpEdit">
+           <property name="placeholderText">
+            <string>例如 192.168.1.100</string>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="0">
+          <widget class="QLabel" name="labelPort">
+           <property name="text">
+            <string>端口:</string>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="1">
+          <widget class="QLineEdit" name="clientPortEdit">
+           <property name="placeholderText">
+            <string>8888</string>
+           </property>
+           <property name="text">
+            <string>8888</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+       <item>
+        <widget class="QPushButton" name="connectButton">
+         <property name="text">
+          <string>连接</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="readyButton">
+         <property name="text">
+          <string>准备</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="statusLabel">
+         <property name="text">
+          <string>请选择模式</string>
+         </property>
+         <property name="alignment">
+          <set>Qt::AlignCenter</set>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <spacer name="verticalSpacer">
+         <property name="orientation">
+          <enum>Qt::Vertical</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>20</width>
+           <height>40</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+      </layout>
+     </widget>
+     <resources/>
+     <connections>
+      <!-- 自动连接槽函数，无需手动添加 -->
+     </connections>
+    </ui>
