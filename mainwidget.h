@@ -59,7 +59,9 @@ public:
 
     void setNetworkSocket(QTcpSocket* socket, bool isHost);
 
-
+public slots:
+    void startGame();
+    void resetGame();
 
 private slots:
     void togglePause();
@@ -90,7 +92,6 @@ private:
 public:
     void setSingleMode();
 
-    void InitGameFunc();
     void StartGameFunc();
     void OverGameFunc();
 

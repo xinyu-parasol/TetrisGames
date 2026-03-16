@@ -101,6 +101,8 @@ void MainWidget::setNetworkSocket(QTcpSocket* socket, bool isHost)
                 this,
                 &MainWidget::onNetworkData);
     }
+
+    resetGame();
 }
 
 void MainWidget::onNetworkData()
@@ -172,7 +174,7 @@ void MainWidget::stopGameDueToOpponentOver(int opponentScore)
         m_networkSocket = nullptr;
     }
 
-     InitGameFunc();
+     resetGame();
 }
 
 MainWidget::~MainWidget()
@@ -183,40 +185,51 @@ MainWidget::~MainWidget()
     //delete ui;
 }
 
-void MainWidget::InitGameFunc()
+void MainWidget::resetGame()
 {
-    memset(enemy_area,0,sizeof(enemy_area));
-    for(int i=0;i<AREA_ROW;i++){
-        for(int j=0;j<AREA_COL;j++){
+    // 清空棋盘
+    memset(enemy_area, 0, sizeof(enemy_area));
+    for (int i = 0; i < AREA_ROW; ++i) {
+        for (int j = 0; j < AREA_COL; ++j) {
             game_area[i][j] = 0;
             game_color[i][j] = Qt::transparent;
         }
     }
 
-    speed_ms=800;
-    refresh_ms=30;
+    speed_ms = 800;
+    refresh_ms = 30;
+    score = 0;
+    isStable = false;
+    hardDropping = false;
+    shakeTime = 0;
+    particles.clear();
 
-    //随机初始化
+    // 随机种子
     srand(time(0));
 
-    score = 0;
-
-    StartGameFunc();
-}
-
-void MainWidget::StartGameFunc()
-{
-    game_timer = startTimer(speed_ms);
-    paint_timer = startTimer(refresh_ms);
-
-    //产生下一个方块
-    int block_id = rand()%7;
-    CreateBlock(next_block,block_id);
-
-    next_color = block_colors[rand()%4];
+    // 生成下一个方块
+    int block_id = rand() % 7;
+    CreateBlock(next_block, block_id);
+    next_color = block_colors[rand() % 4];
 
     ResetBlock();
+
+    m_paused = false;
+    if (m_pauseButton) m_pauseButton->setText("暂停");
+
+    update();  // 刷新界面
 }
+
+void MainWidget::startGame()
+{
+    if (game_timer == 0) {
+        game_timer = startTimer(speed_ms);
+    }
+    if (paint_timer == 0) {
+        paint_timer = startTimer(refresh_ms);
+    }
+}
+
 void MainWidget::OverGameFunc()
 {
     // 停止计时器
@@ -243,12 +256,7 @@ void MainWidget::OverGameFunc()
     m_paused = false;
     if (m_pauseButton) m_pauseButton->setText("暂停");
 
-    memset(game_area,0,sizeof(game_area));
-    for(int i=0;i<AREA_ROW;i++)
-        for(int j=0;j<AREA_COL;j++)
-            game_color[i][j] = Qt::transparent;
-    update();
-
+    resetGame();
 }
 
 void MainWidget::sendGameState()
@@ -379,8 +387,6 @@ void MainWidget::CreateBlock(int block[4][4],int block_id)
         break;
     }
 }
-
-
 
 //确定边界
 void MainWidget::GetBorder(int block[4][4],Border &border)
@@ -907,6 +913,8 @@ void MainWidget::setSingleMode()
     // 重置暂停状态
     m_paused = false;
     if (m_pauseButton) m_pauseButton->setText("暂停");
+
+    resetGame();
 }
 
 MainWidget::MainWidget(QWidget *parent)
@@ -915,8 +923,10 @@ MainWidget::MainWidget(QWidget *parent)
     , m_audioOutput(new QAudioOutput(this))
     , m_networkSocket(nullptr)
     , m_isHost(false)
-    , m_pauseButton(nullptr)      // 初始化
+    , m_pauseButton(nullptr)
     , m_paused(false)
+    , game_timer(0)
+    , paint_timer(0)
     , m_isSinglePlayer(false)
     , m_dbConnected(false)
 {
@@ -962,5 +972,5 @@ MainWidget::MainWidget(QWidget *parent)
     connect(m_pauseButton, &QPushButton::clicked, this, &MainWidget::togglePause);
 
     initDatabase();
-    InitGameFunc();
+    resetGame();
 }

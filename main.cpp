@@ -19,6 +19,7 @@ int main(int argc, char *argv[])
             game.setSingleMode();
         }
 
+        game.startGame();
         QTimer::singleShot(0, [&]() {
             lobby.close();  // 关闭大厅
             game.show();    // 显示游戏界面
