@@ -155,6 +155,8 @@ private:
     //方块
     int cur_block[4][4];
     int next_block[4][4];
+
+    int m_blockSize = 0;
     //坐标
     block_point block_pos;
     //边界

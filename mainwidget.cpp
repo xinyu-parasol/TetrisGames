@@ -119,20 +119,19 @@ void MainWidget::setNetworkSocket(QTcpSocket* socket, bool isHost)
 void MainWidget::onNetworkData()
 {
     QDataStream in(m_networkSocket);
-
-    static int blockSize = 0;
+    in.setVersion(QDataStream::Qt_6_0);
 
     while (true)
     {
-        if (blockSize == 0)
+        if (m_blockSize == 0)
         {
-            if (m_networkSocket->bytesAvailable() < sizeof(int))
+            if (m_networkSocket->bytesAvailable() < sizeof(qint32))
                 return;
 
-            in >> blockSize;
+            in >> m_blockSize;
         }
 
-        if (m_networkSocket->bytesAvailable() < blockSize)
+        if (m_networkSocket->bytesAvailable() < m_blockSize)
             return;
 
         int msgType;
@@ -140,6 +139,8 @@ void MainWidget::onNetworkData()
 
         if (msgType == 0)
         {
+            memset(enemy_area, 0, sizeof(enemy_area));
+
             for(int i=0;i<AREA_ROW;i++)
                 for(int j=0;j<AREA_COL;j++)
                     in >> enemy_area[i][j];
@@ -160,7 +161,7 @@ void MainWidget::onNetworkData()
             stopGameDueToOpponentOver(opponentScore);
         }
 
-        blockSize = 0;
+        m_blockSize = 0;
     }
 }
 
@@ -220,6 +221,8 @@ void MainWidget::resetGame()
 
     // 随机种子
     srand(time(0));
+    enemy_x = 0;
+    enemy_y = 0;
 
     // 生成下一个方块
     int block_id = rand() % 7;
@@ -282,6 +285,7 @@ void MainWidget::sendGameState()
 
     QByteArray data;
     QDataStream out(&data,QIODevice::WriteOnly);
+    out.setVersion(QDataStream::Qt_6_0);
 
     out << (int)0;
 
@@ -296,18 +300,18 @@ void MainWidget::sendGameState()
         for(int j=0;j<4;j++)
         {
             if(cur_block[i][j])
-            {
-                int x = block_pos.pos_x + j;
-                int y = block_pos.pos_y + i;
+           {
+               int x = block_pos.pos_x + j;
+               int y = block_pos.pos_y + i;
 
                 if(x>=0 && x<AREA_COL && y>=0 && y<AREA_ROW)
                     temp_area[y][x] = 0;
-            }
-        }
+           }
+       }
     }
 
     for(int i=0;i<AREA_ROW;i++)
-        for(int j=0;j<AREA_COL;j++)
+         for(int j=0;j<AREA_COL;j++)
             out << temp_area[i][j];
 
     out<<block_pos.pos_x<<block_pos.pos_y;
@@ -318,8 +322,9 @@ void MainWidget::sendGameState()
 
     QByteArray packet;
     QDataStream packetStream(&packet, QIODevice::WriteOnly);
+    packetStream.setVersion(QDataStream::Qt_6_0);
 
-    packetStream << data.size();
+    packetStream << (qint32)data.size();
     packet.append(data);
 
     m_networkSocket->write(packet);
@@ -340,7 +345,7 @@ void MainWidget::sendGameOver(int finalScore)
 
     QByteArray packet;
     QDataStream packetStream(&packet, QIODevice::WriteOnly);
-    packetStream << data.size();
+    packetStream << (qint32)data.size();
     packet.append(data);
 
     m_networkSocket->write(packet);
@@ -393,6 +398,9 @@ void MainWidget::BlockMove(Direction dir)
         ConvertStable(block_pos.pos_x, block_pos.pos_y);
         hardDropping = false;
     }
+
+    if(!m_isSinglePlayer)
+        sendGameState();
 }
 void MainWidget::BlockRotate(int block[4][4])
 {
@@ -411,6 +419,9 @@ void MainWidget::BlockRotate(int block[4][4])
     }
     // 无论是否碰撞，都更新边界（恢复后也需更新）
     GetBorder(cur_block, cur_border);
+
+    if(!m_isSinglePlayer)
+        sendGameState();
 }
 void MainWidget::CreateBlock(int block[4][4],int block_id)
 {
@@ -558,6 +569,8 @@ void MainWidget::ConvertStable(int x,int y)
 
     // 生成下一个方块
     ResetBlock();
+    if(!m_isSinglePlayer)
+        sendGameState();
 }
 
 //判断是否碰撞
@@ -855,8 +868,6 @@ void MainWidget::timerEvent(QTimerEvent *event)
                 BlockMove(DOWN);
             }
 
-            if(!m_isSinglePlayer)
-                sendGameState();
         }
     } else if (event->timerId() == paint_timer) {
         update();
@@ -886,6 +897,8 @@ void MainWidget::keyPressEvent(QKeyEvent *event)
         dropSound.play();
         isStable = true;
         ConvertStable(block_pos.pos_x, block_pos.pos_y);
+        if(!m_isSinglePlayer)
+            sendGameState();
         hardDropping = false;
         break;
     case Qt::Key_Up:
@@ -900,6 +913,8 @@ void MainWidget::keyPressEvent(QKeyEvent *event)
         dropSound.play();
         isStable = true;
         ConvertStable(block_pos.pos_x, block_pos.pos_y);
+        if(!m_isSinglePlayer)
+            sendGameState();
         hardDropping = false;
         break;
     default:
