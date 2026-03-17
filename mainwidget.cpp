@@ -88,13 +88,24 @@ void MainWidget::setNetworkSocket(QTcpSocket* socket, bool isHost)
         m_isSinglePlayer = false;
 
         int width =
-            MARGIN*4 +
-            AREA_COL * BLOCK_SIZE +
-            4 * BLOCK_SIZE +
-            AREA_COL * BLOCK_SIZE/2 +
-            120;
+            MARGIN
+            + AREA_COL * BLOCK_SIZE
+            + 200
+            + AREA_COL * BLOCK_SIZE
+            + MARGIN;
 
-        setFixedWidth(width);
+        int height =
+            MARGIN*2 +
+            AREA_ROW * BLOCK_SIZE;
+
+        setFixedSize(width, height);
+        this->resize(width, height);
+        QPixmap bkground(":/new/prefix1/images/background.jpg");
+        bkground = bkground.scaled(this->size(), Qt::IgnoreAspectRatio);
+        QPalette palette;
+        palette.setBrush(QPalette::Window, bkground);
+        this->setPalette(palette);
+        this->updateGeometry();
 
         connect(m_networkSocket,
                 &QTcpSocket::readyRead,
@@ -108,45 +119,48 @@ void MainWidget::setNetworkSocket(QTcpSocket* socket, bool isHost)
 void MainWidget::onNetworkData()
 {
     QDataStream in(m_networkSocket);
-    int msgType;
-    in >> msgType;
 
-    if (msgType == 0)  // 游戏状态更新
+    static int blockSize = 0;
+
+    while (true)
     {
-        // 读取对手棋盘
-        for(int i=0;i<AREA_ROW;i++)
-            for(int j=0;j<AREA_COL;j++)
-                in >> enemy_area[i][j];
+        if (blockSize == 0)
+        {
+            if (m_networkSocket->bytesAvailable() < sizeof(int))
+                return;
 
-        int ex,ey;
-        in >> ex >> ey;
+            in >> blockSize;
+        }
 
-        int enemy_block[4][4];
-        for(int i=0;i<4;i++)
-            for(int j=0;j<4;j++)
-                in >> enemy_block[i][j];
+        if (m_networkSocket->bytesAvailable() < blockSize)
+            return;
 
-        // 合并到对手棋盘显示
-        for(int i=0;i<4;i++)
-            for(int j=0;j<4;j++)
-            {
-                if(enemy_block[i][j])
-                {
-                    int x=ex+j;
-                    int y=ey+i;
-                    if(x>=0 && x<AREA_COL && y>=0 && y<AREA_ROW)
-                        enemy_area[y][x]=1;
-                }
-            }
-        update();
-    }
-    else if (msgType == 1) // 游戏结束通知
-    {
-        int opponentScore;
-        in >> opponentScore;  // 如果发送了对方得分，可以读取用于显示
+        int msgType;
+        in >> msgType;
 
-        // 停止自己的游戏（但不要再次发送结束通知）
-        stopGameDueToOpponentOver(opponentScore);
+        if (msgType == 0)
+        {
+            for(int i=0;i<AREA_ROW;i++)
+                for(int j=0;j<AREA_COL;j++)
+                    in >> enemy_area[i][j];
+
+            in >> enemy_x >> enemy_y;
+
+            for(int i=0;i<4;i++)
+                for(int j=0;j<4;j++)
+                    in >> enemy_cur_block[i][j];
+
+            update();
+        }
+        else if (msgType == 1)
+        {
+            int opponentScore;
+            in >> opponentScore;
+
+            stopGameDueToOpponentOver(opponentScore);
+        }
+
+        blockSize = 0;
     }
 }
 
@@ -263,14 +277,38 @@ void MainWidget::sendGameState()
 {
     if(!m_networkSocket) return;
 
+    if(m_networkSocket->state() != QAbstractSocket::ConnectedState)
+        return;
+
     QByteArray data;
     QDataStream out(&data,QIODevice::WriteOnly);
 
     out << (int)0;
 
+    int temp_area[AREA_ROW][AREA_COL];
+
     for(int i=0;i<AREA_ROW;i++)
         for(int j=0;j<AREA_COL;j++)
-            out<<game_area[i][j];
+            temp_area[i][j] = game_area[i][j];
+
+    for(int i=0;i<4;i++)
+    {
+        for(int j=0;j<4;j++)
+        {
+            if(cur_block[i][j])
+            {
+                int x = block_pos.pos_x + j;
+                int y = block_pos.pos_y + i;
+
+                if(x>=0 && x<AREA_COL && y>=0 && y<AREA_ROW)
+                    temp_area[y][x] = 0;
+            }
+        }
+    }
+
+    for(int i=0;i<AREA_ROW;i++)
+        for(int j=0;j<AREA_COL;j++)
+            out << temp_area[i][j];
 
     out<<block_pos.pos_x<<block_pos.pos_y;
 
@@ -278,12 +316,21 @@ void MainWidget::sendGameState()
         for(int j=0;j<4;j++)
             out<<cur_block[i][j];
 
-    m_networkSocket->write(data);
+    QByteArray packet;
+    QDataStream packetStream(&packet, QIODevice::WriteOnly);
+
+    packetStream << data.size();
+    packet.append(data);
+
+    m_networkSocket->write(packet);
 }
 
 void MainWidget::sendGameOver(int finalScore)
 {
     if(!m_networkSocket) return;
+
+    if(m_networkSocket->state() != QAbstractSocket::ConnectedState)
+        return;
 
     QByteArray data;
     QDataStream out(&data, QIODevice::WriteOnly);
@@ -291,7 +338,12 @@ void MainWidget::sendGameOver(int finalScore)
     out << (int)1;           // 消息类型：游戏结束
     out << finalScore;       // 可选：发送己方得分给对方
 
-    m_networkSocket->write(data);
+    QByteArray packet;
+    QDataStream packetStream(&packet, QIODevice::WriteOnly);
+    packetStream << data.size();
+    packet.append(data);
+
+    m_networkSocket->write(packet);
 }
 
 void MainWidget::ResetBlock()
@@ -339,6 +391,7 @@ void MainWidget::BlockMove(Direction dir)
         // 向下碰撞则转为固定
         isStable = true;
         ConvertStable(block_pos.pos_x, block_pos.pos_y);
+        hardDropping = false;
     }
 }
 void MainWidget::BlockRotate(int block[4][4])
@@ -439,6 +492,7 @@ void MainWidget::spawnLineParticles(int row)
 //转为稳定方块
 void MainWidget::ConvertStable(int x,int y)
 {
+    qDebug() << "ConvertStable triggered!";
     shakeTime = 6;
     shakeOffset = 6;
     // 将当前方块填入游戏区域（标记为 2）
@@ -449,8 +503,10 @@ void MainWidget::ConvertStable(int x,int y)
                 int gy = y + i;
                 // 只写入有效范围（防止负行或越界）
                 if (gy >= 0 && gy < AREA_ROW && gx >= 0 && gx < AREA_COL)
+                {
                     game_area[gy][gx] = 2;
                     game_color[gy][gx] = cur_color;
+                }
             }
         }
     }
@@ -471,11 +527,16 @@ void MainWidget::ConvertStable(int x,int y)
             spawnLineParticles(row);
             clearSound.play();
             // 消除该行，上面的行下移
-            for (int r = row; r > 0; --r)
-                for (int c = 0; c < AREA_COL; ++c)
+            for (int r = row; r > 0; --r){
+                for (int c = 0; c < AREA_COL; ++c){
                     game_area[r][c] = game_area[r-1][c];
-            for (int c = 0; c < AREA_COL; ++c)
+                    game_color[r][c] = game_color[r-1][c];
+                }
+            }
+            for (int c = 0; c < AREA_COL; ++c){
                 game_area[0][c] = 0;
+                game_color[0][c] = QColor();
+            }
             linesRemoved++;
             // 继续检查同一行（因为下移后新行）
             // row 保持不变
@@ -689,36 +750,59 @@ void MainWidget::paintEvent(QPaintEvent *event)
 
     if(!m_isSinglePlayer)
     {
-        int enemy_x = MARGIN + AREA_COL * BLOCK_SIZE + 200;
-        int enemy_y = MARGIN;
+        int enemy_x_pos = MARGIN + AREA_COL * BLOCK_SIZE + 200;
+        int enemy_y_pos = MARGIN;
 
         painter.setPen(Qt::white);
         painter.setFont(QFont("Arial",12));
-        painter.drawText(enemy_x, enemy_y-10, "Opponent");
+        painter.drawText(enemy_x_pos, enemy_y_pos -10, "Opponent");
 
+        //网格
         for(int i=0;i<=AREA_ROW;i++)
         {
-            int y = enemy_y + i*BLOCK_SIZE/2;
-            painter.drawLine(enemy_x,y,enemy_x+AREA_COL*BLOCK_SIZE/2,y);
+            int y = enemy_y_pos + i * BLOCK_SIZE;
+            painter.drawLine(enemy_x_pos,y,enemy_x_pos+AREA_COL*BLOCK_SIZE,y);
         }
 
         for(int j=0;j<=AREA_COL;j++)
         {
-            int x = enemy_x + j*BLOCK_SIZE/2;
-            painter.drawLine(x,enemy_y,x,enemy_y+AREA_ROW*BLOCK_SIZE/2);
+            int x = enemy_x_pos + j * BLOCK_SIZE;
+            painter.drawLine(x,enemy_y_pos,x,enemy_y_pos+AREA_ROW*BLOCK_SIZE);
         }
 
+        //固定块
         for(int i=0;i<AREA_ROW;i++)
         {
             for(int j=0;j<AREA_COL;j++)
             {
                 if(enemy_area[i][j])
                 {
-                    int x = enemy_x + j*BLOCK_SIZE/2;
-                    int y = enemy_y + i*BLOCK_SIZE/2;
+                    int x = enemy_x_pos + j * BLOCK_SIZE;
+                    int y = enemy_y_pos + i * BLOCK_SIZE;
 
                     painter.setBrush(QColor(180,180,180));
-                    painter.drawRect(x,y,BLOCK_SIZE/2,BLOCK_SIZE/2);
+                    painter.drawRect(x,y,BLOCK_SIZE,BLOCK_SIZE);
+                }
+            }
+        }
+        //当前块
+        for(int i=0;i<4;i++)
+        {
+            for(int j=0;j<4;j++)
+            {
+                if(enemy_cur_block[i][j])
+                {
+                    int gx = enemy_x + j;
+                    int gy = enemy_y + i;
+
+                    if(gx>=0 && gx<AREA_COL && gy>=0 && gy<AREA_ROW)
+                    {
+                        int x = enemy_x_pos + gx * BLOCK_SIZE;
+                        int y = enemy_y_pos + gy * BLOCK_SIZE;
+
+                        painter.setBrush(QColor(255,100,100)); // 红色区分
+                        painter.drawRect(x,y,BLOCK_SIZE,BLOCK_SIZE);
+                    }
                 }
             }
         }
@@ -770,13 +854,14 @@ void MainWidget::timerEvent(QTimerEvent *event)
                 speed_ms = 800;
                 BlockMove(DOWN);
             }
+
+            if(!m_isSinglePlayer)
+                sendGameState();
         }
     } else if (event->timerId() == paint_timer) {
         update();
     }
     QWidget::timerEvent(event);
-    if(!m_isSinglePlayer)
-        sendGameState();
 }
 
 void MainWidget::keyPressEvent(QKeyEvent *event)
@@ -801,7 +886,7 @@ void MainWidget::keyPressEvent(QKeyEvent *event)
         dropSound.play();
         isStable = true;
         ConvertStable(block_pos.pos_x, block_pos.pos_y);
-
+        hardDropping = false;
         break;
     case Qt::Key_Up:
         BlockRotate(cur_block);
@@ -815,6 +900,7 @@ void MainWidget::keyPressEvent(QKeyEvent *event)
         dropSound.play();
         isStable = true;
         ConvertStable(block_pos.pos_x, block_pos.pos_y);
+        hardDropping = false;
         break;
     default:
         QWidget::keyPressEvent(event);
@@ -903,7 +989,9 @@ void MainWidget::setSingleMode()
         4 * BLOCK_SIZE +
         80;
 
-    setFixedWidth(width);
+    int height = MARGIN*2 + AREA_ROW*BLOCK_SIZE;
+
+    setFixedSize(width, height);
 
     if (m_networkSocket) {
         m_networkSocket->disconnect();
@@ -935,9 +1023,7 @@ MainWidget::MainWidget(QWidget *parent)
 
     //限制大小
     setWindowFlags(windowFlags() & ~Qt::WindowMaximizeButtonHint);
-    setFixedSize(AREA_COL*BLOCK_SIZE+MARGIN*4+4*BLOCK_SIZE,
-                 AREA_ROW*BLOCK_SIZE+MARGIN*2);
-    setFixedHeight(MARGIN*2 + AREA_ROW*BLOCK_SIZE + 50);
+
     //背景图片
     //QPixmap bkground("D://C++//QtOnline//TetrisGames//images//background.jpg");
     QPixmap bkground(":/new/prefix1/images/background.jpg");

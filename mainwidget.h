@@ -185,6 +185,9 @@ private:
     QSqlDatabase m_db;
     bool m_dbConnected;             // 连接状态标志
     int enemy_area[AREA_ROW][AREA_COL];
+    int enemy_x;
+    int enemy_y;
+    int enemy_cur_block[4][4];
     void sendGameState();
 };
 #endif // MAINWIDGET_H

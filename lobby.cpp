@@ -228,6 +228,9 @@ void Lobby::onSocketReadyRead()
             break;
         case MSG_BOTH_READY:
             // 服务器通知客户端开始游戏
+            disconnect(m_socket, &QTcpSocket::readyRead, this, &Lobby::onSocketReadyRead);
+            disconnect(m_socket, nullptr, this, nullptr);
+
             emit startGame(m_socket, m_isHost);
             break;
         default:
@@ -264,6 +267,8 @@ void Lobby::checkBothReady()
 
             // 自己也开始
             m_socket->setParent(nullptr);
+            disconnect(m_socket, &QTcpSocket::readyRead, this, &Lobby::onSocketReadyRead);
+            disconnect(m_socket, nullptr, this, nullptr);
             emit startGame(m_socket, m_isHost);
         }
         // 客户端会收到 MSG_BOTH_READY 后触发开始
