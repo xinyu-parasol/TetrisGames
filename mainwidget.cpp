@@ -7,7 +7,7 @@
 #include <QDebug>
 #include <QNetworkInterface>
 #include <QTcpSocket>
-
+#include <QRandomGenerator>
 int item_diamond[4][4] = {
     {0,0,0,0},
     {0,1,1,0},
@@ -151,6 +151,13 @@ void MainWidget::onNetworkData()
                 for(int j=0;j<4;j++)
                     in >> enemy_cur_block[i][j];
 
+            int garbageLines = 0;
+            in >> garbageLines;
+            if (garbageLines > 0)
+            {
+                addGarbageLines(garbageLines);   // 调用添加垃圾行的函数
+            }
+
             update();
         }
         else if (msgType == 1)
@@ -198,6 +205,62 @@ MainWidget::~MainWidget()
         m_db.close();
     }
     //delete ui;
+}
+
+bool MainWidget::isBlockColliding() const
+{
+    for (int i = 0; i < 4; ++i) {
+        for (int j = 0; j < 4; ++j) {
+            if (cur_block[i][j] == 0) continue;
+            int x = block_pos.pos_x + j;
+            int y = block_pos.pos_y + i;
+            // 超出边界或碰到稳定块即为碰撞
+            if (x < 0 || x >= AREA_COL || y < 0 || y >= AREA_ROW)
+                return true;
+            if (game_area[y][x] == 2)
+                return true;
+        }
+    }
+    return false;
+}
+
+void MainWidget::addGarbageLines(int lines)
+{
+    if (lines <= 0) return;
+
+    for (int row = 0; row < AREA_ROW - lines; ++row) {
+        for (int col = 0; col < AREA_COL; ++col) {
+            game_area[row][col] = game_area[row + lines][col];
+            game_color[row][col] = game_color[row + lines][col];
+        }
+    }
+
+    for (int i = 0; i < lines; ++i) {
+        int row = AREA_ROW - lines + i;
+        int gapCol = QRandomGenerator::global()->bounded(AREA_COL);
+        for (int col = 0; col < AREA_COL; ++col) {
+            if (col == gapCol) {
+                game_area[row][col] = 0;
+            } else {
+                game_area[row][col] = 2;
+                game_color[row][col] = QColor(100, 100, 100);
+            }
+        }
+    }
+
+    if (isBlockColliding()) {
+        OverGameFunc();
+        return;
+    }
+
+    for (int col = 0; col < AREA_COL; ++col) {
+        if (game_area[0][col] == 2) {
+            OverGameFunc();
+            break;
+        }
+    }
+
+    update();
 }
 
 void MainWidget::resetGame()
@@ -320,6 +383,9 @@ void MainWidget::sendGameState()
         for(int j=0;j<4;j++)
             out<<cur_block[i][j];
 
+    out << m_pendingGarbageLines;
+    m_pendingGarbageLines = 0;
+
     QByteArray packet;
     QDataStream packetStream(&packet, QIODevice::WriteOnly);
     packetStream.setVersion(QDataStream::Qt_6_0);
@@ -327,7 +393,10 @@ void MainWidget::sendGameState()
     packetStream << (qint32)data.size();
     packet.append(data);
 
+
     m_networkSocket->write(packet);
+
+    m_pendingGarbageLines = 0;
 }
 
 void MainWidget::sendGameOver(int finalScore)
@@ -564,6 +633,12 @@ void MainWidget::ConvertStable(int x,int y)
         case 2: score += 30; break;
         case 3: score += 60; break;
         case 4: score += 100; break;
+        }
+
+        if (!m_isSinglePlayer && m_networkSocket && m_networkSocket->state() == QAbstractSocket::ConnectedState)
+        {
+            m_pendingGarbageLines += linesRemoved;
+            sendGameState();  // 立即发送状态，让对方尽快收到攻击
         }
     }
 
@@ -1048,6 +1123,7 @@ MainWidget::MainWidget(QWidget *parent)
     this->setPalette(palette);
     this->setAutoFillBackground(true);
 
+    m_pendingGarbageLines = 0;
     // //背景音乐
     // m_player->setAudioOutput(m_audioOutput);
     // QString musicPath = QCoreApplication::applicationDirPath()+"/music/background1.mp3";

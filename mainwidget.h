@@ -191,5 +191,9 @@ private:
     int enemy_y;
     int enemy_cur_block[4][4];
     void sendGameState();
+
+    int m_pendingGarbageLines;          // 待发送的垃圾行数
+    void addGarbageLines(int lines);     // 添加垃圾行的函数
+    bool isBlockColliding() const;
 };
 #endif // MAINWIDGET_H
